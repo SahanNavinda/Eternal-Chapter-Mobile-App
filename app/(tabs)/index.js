@@ -1,83 +1,153 @@
 import React, { useState, useEffect } from 'react';
-import { StyleSheet, View, Text, ScrollView, TouchableOpacity } from 'react-native';
-import { Calendar } from 'react-native-calendars';
-import { db } from '../../firebaseConfig'; 
-import { collection, onSnapshot, query, orderBy } from "firebase/firestore";
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  ScrollView, 
+  TouchableOpacity, 
+  StatusBar, 
+  ActivityIndicator, 
+  Image, 
+  Dimensions 
+} from 'react-native';
+import { collection, query, onSnapshot, orderBy } from 'firebase/firestore';
+import { db, auth } from '../../firebaseConfig'; 
+import { Ionicons } from '@expo/vector-icons';
 
-export default function HomeScreen() {
-  const [allEvents, setAllEvents] = useState([]);
-  const [markedDates, setMarkedDates] = useState({});
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [dayEvents, setDayEvents] = useState([]);
+const { width } = Dimensions.get('window');
+
+const MONTHS = [
+  "JAN", "FEB", "MAR", "APR", "MAY", "JUN", 
+  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"
+];
+
+const YEARS = ["2025", "2026", "2027"];
+
+export default function PremiumCalendar() {
+  const [events, setEvents] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
+  // Selection State
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth()); // 0-11
+  const [selectedYear, setSelectedYear] = useState("2026");
+
+  const currentUser = auth.currentUser;
 
   useEffect(() => {
-    const q = query(collection(db, "events"), orderBy("date", "asc"));
+    const q = query(collection(db, "shoots"), orderBy("date", "asc"));
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      const eventsList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setAllEvents(eventsList);
+      const allEvents = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       
-      // Generate dots for the calendar
-      const dots = {};
-      eventsList.forEach((event) => {
-        // If multiple events on same day, we can show multiple dots or a specific color
-        dots[event.date] = { 
-          marked: true, 
-          dotColor: event.status === 'Accepted' ? '#28a745' : '#ff9500' 
-        };
+      const filtered = allEvents.filter(event => {
+        // 1. User Specific Filter
+        const isAssigned = !event.workerName || 
+                           (event.workerName === currentUser?.displayName) || 
+                           (event.assignedTo === currentUser?.email);
+        
+        // 2. Date Filter (Checking if event date matches selected month/year)
+        const eventDate = new Date(event.date);
+        const matchesMonth = eventDate.getMonth() === selectedMonth;
+        const matchesYear = event.date.includes(selectedYear);
+                           
+        return isAssigned && matchesMonth && matchesYear;
       });
-      setMarkedDates(dots);
-      
-      // Refresh the list for the currently selected date
-      filterEventsByDate(selectedDate, eventsList);
+
+      setEvents(filtered);
+      setLoading(false);
     });
     return () => unsubscribe();
-  }, []);
+  }, [currentUser, selectedMonth, selectedYear]);
 
-  const filterEventsByDate = (date, list = allEvents) => {
-    const filtered = list.filter(e => e.date === date);
-    setDayEvents(filtered);
-    setSelectedDate(date);
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'Completed': return '#28a745';
+      case 'Accepted': return '#007AFF';
+      default: return '#e67e22';
+    }
   };
+
+  if (loading) return (
+    <View style={styles.loadingContainer}>
+      <ActivityIndicator size="large" color="#007AFF" />
+    </View>
+  );
 
   return (
     <View style={styles.container}>
-      <Calendar 
-        markedDates={{
-          ...markedDates,
-          [selectedDate]: { ...markedDates[selectedDate], selected: true, selectedColor: '#007AFF' }
-        }} 
-        onDayPress={(day) => filterEventsByDate(day.dateString)}
-        theme={{
-          todayTextColor: '#007AFF',
-          selectedDayBackgroundColor: '#007AFF',
-          dotColor: '#007AFF',
-        }}
-      />
+      <StatusBar barStyle="light-content" />
 
-      <View style={styles.eventListHeader}>
-        <Text style={styles.headerTitle}>Events for {selectedDate}</Text>
-        <Text style={styles.headerSub}>{dayEvents.length} Shoot(s) Scheduled</Text>
+      {/* BACKGROUND WATERMARK */}
+      <View style={styles.watermarkContainer} pointerEvents="none">
+        <Image 
+          source={require('../../assets/images/logo.png')} 
+          style={styles.watermarkLogo} 
+          resizeMode="contain"
+        />
+      </View>
+      
+      {/* PREMIUM FILTER BAR */}
+      <View style={styles.filterHeader}>
+        <View style={styles.yearRow}>
+           {YEARS.map(y => (
+             <TouchableOpacity key={y} onPress={() => setSelectedYear(y)}>
+                <Text style={[styles.yearText, selectedYear === y && styles.activeYear]}>{y}</Text>
+             </TouchableOpacity>
+           ))}
+        </View>
+        
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.monthScroll}>
+          {MONTHS.map((m, index) => (
+            <TouchableOpacity 
+              key={m} 
+              onPress={() => setSelectedMonth(index)}
+              style={[styles.monthTab, selectedMonth === index && styles.activeMonthTab]}
+            >
+              <Text style={[styles.monthText, selectedMonth === index && styles.activeMonthText]}>{m}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
 
-      <ScrollView style={styles.eventScroll}>
-        {dayEvents.length > 0 ? (
-          dayEvents.map((item) => (
-            <View key={item.id} style={styles.eventCard}>
-              <View style={[styles.statusIndicator, { backgroundColor: item.status === 'Accepted' ? '#28a745' : '#ff9500' }]} />
-              <View style={styles.cardContent}>
-                <Text style={styles.eventTitle}>{item.name}</Text>
-                <Text style={styles.eventInfo}>📍 {item.location}</Text>
-                <Text style={styles.eventInfo}>👤 Assigned: {item.assignedTo}</Text>
-                <Text style={[styles.statusText, { color: item.status === 'Accepted' ? '#28a745' : '#ff9500' }]}>
-                  {item.status.toUpperCase()}
-                </Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        {events.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="calendar-outline" size={50} color="#222" />
+            <Text style={styles.emptyText}>No productions in {MONTHS[selectedMonth]} {selectedYear}</Text>
+          </View>
+        ) : (
+          events.map((item, index) => (
+            <View key={item.id} style={styles.timelineItem}>
+              <View style={styles.lineSection}>
+                <View style={[styles.dot, { backgroundColor: getStatusColor(item.status) }]} />
+                {index !== events.length - 1 && <View style={styles.verticalLine} />}
               </View>
+
+              <TouchableOpacity style={styles.eventCard} activeOpacity={0.9}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.dateText}>{item.date}</Text>
+                  <View style={[styles.statusBadge, { borderColor: getStatusColor(item.status) }]}>
+                    <Text style={[styles.statusText, { color: getStatusColor(item.status) }]}>
+                      {item.status?.toUpperCase() || 'PENDING'}
+                    </Text>
+                  </View>
+                </View>
+
+                <Text style={styles.clientName}>{item.clientName?.toUpperCase()}</Text>
+                
+                <View style={styles.infoRow}>
+                  <View style={styles.iconInfo}>
+                    <Ionicons name="location-sharp" size={14} color="#007AFF" />
+                    <Text style={styles.infoText}>{item.location || 'Location TBA'}</Text>
+                  </View>
+                </View>
+
+                <View style={styles.cardFooter}>
+                  <Text style={styles.footerLabel}>ASSIGNED TO YOU</Text>
+                  <Ionicons name="checkmark-circle" size={14} color="#28a745" />
+                </View>
+              </TouchableOpacity>
             </View>
           ))
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>No events scheduled for this day.</Text>
-          </View>
         )}
       </ScrollView>
     </View>
@@ -85,28 +155,48 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
-  eventListHeader: { padding: 15, backgroundColor: '#f8f9fa', borderBottomWidth: 1, borderBottomColor: '#eee' },
-  headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#1a1a1a' },
-  headerSub: { fontSize: 12, color: '#666', marginTop: 2 },
-  eventScroll: { flex: 1, padding: 15 },
-  eventCard: { 
-    flexDirection: 'row', 
-    backgroundColor: '#fff', 
-    borderRadius: 12, 
-    marginBottom: 12, 
-    elevation: 2, 
-    shadowColor: '#000', 
-    shadowOffset: { width: 0, height: 1 }, 
-    shadowOpacity: 0.1, 
-    shadowRadius: 2,
-    overflow: 'hidden'
+  container: { flex: 1, backgroundColor: '#000' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' },
+  
+  // Filter Header Styles
+  filterHeader: { 
+    paddingTop: 60, 
+    backgroundColor: 'rgba(10, 10, 10, 0.95)', 
+    borderBottomWidth: 1, 
+    borderColor: '#1a1a1a',
+    zIndex: 10 
   },
-  statusIndicator: { width: 6 },
-  cardContent: { padding: 15, flex: 1 },
-  eventTitle: { fontSize: 16, fontWeight: 'bold', color: '#1a1a1a' },
-  eventInfo: { fontSize: 13, color: '#666', marginTop: 3 },
-  statusText: { fontSize: 11, fontWeight: 'bold', marginTop: 8 },
-  emptyContainer: { marginTop: 40, alignItems: 'center' },
-  emptyText: { color: '#bbb', fontSize: 14 }
+  yearRow: { flexDirection: 'row', justifyContent: 'center', gap: 30, marginBottom: 15 },
+  yearText: { color: '#444', fontSize: 12, fontWeight: '900', letterSpacing: 2 },
+  activeYear: { color: '#007AFF' },
+  
+  monthScroll: { paddingLeft: 20, marginBottom: 15 },
+  monthTab: { marginRight: 25, paddingBottom: 5 },
+  activeMonthTab: { borderBottomWidth: 2, borderBottomColor: '#007AFF' },
+  monthText: { color: '#444', fontSize: 13, fontWeight: 'bold' },
+  activeMonthText: { color: '#fff' },
+
+  watermarkContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 0 },
+  watermarkLogo: { width: width * 0.9, height: width * 0.9, opacity: 0.08, tintColor: '#fff' },
+
+  scrollContent: { padding: 25, paddingTop: 30, zIndex: 1 },
+  timelineItem: { flexDirection: 'row' },
+  lineSection: { alignItems: 'center', marginRight: 20, width: 20 },
+  dot: { width: 10, height: 10, borderRadius: 5, zIndex: 2, marginTop: 28 },
+  verticalLine: { width: 1, flex: 1, backgroundColor: '#222', marginVertical: 5 },
+  
+  eventCard: { flex: 1, backgroundColor: 'rgba(18, 18, 18, 0.85)', borderRadius: 22, padding: 22, marginBottom: 28, borderWidth: 1, borderColor: '#222' },
+  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 15 },
+  dateText: { color: '#666', fontSize: 11, fontWeight: 'bold' },
+  statusBadge: { borderWidth: 1, paddingHorizontal: 10, paddingVertical: 3, borderRadius: 6 },
+  statusText: { fontSize: 8, fontWeight: '900' },
+  clientName: { color: '#fff', fontSize: 18, fontWeight: 'bold', marginBottom: 18, letterSpacing: 0.5 },
+  infoRow: { flexDirection: 'row', marginBottom: 20 },
+  iconInfo: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  infoText: { color: '#aaa', fontSize: 12 },
+  cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 18, borderTopWidth: 1, borderTopColor: '#222' },
+  footerLabel: { color: '#444', fontSize: 9, fontWeight: '900', letterSpacing: 1 },
+  
+  emptyState: { alignItems: 'center', marginTop: 120 },
+  emptyText: { color: '#333', marginTop: 20, fontSize: 12, fontWeight: 'bold', textAlign: 'center' }
 });

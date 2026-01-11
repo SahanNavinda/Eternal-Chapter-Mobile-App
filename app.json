@@ -4,7 +4,7 @@
     "slug": "eternal-chapter",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/images/logo.png",
+    "icon": "./assets/images/icon.png",
     "scheme": "eternalchapter",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -15,7 +15,7 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#D1D3D4",
-        "foregroundImage": "./assets/images/logo.png"
+        "foregroundImage": "./assets/images/icon.png"
       },
       "package": "com.eternalchapter.app",
       "edgeToEdgeEnabled": true,

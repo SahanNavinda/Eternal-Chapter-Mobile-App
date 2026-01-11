@@ -1,8 +1,11 @@
 import { EmailAuthProvider, reauthenticateWithCredential, updateEmail, updatePassword, updateProfile } from "firebase/auth";
 import { doc, updateDoc } from "firebase/firestore";
 import { useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, Image, Dimensions, StatusBar } from 'react-native';
 import { auth, db } from '../firebaseConfig';
+import { Ionicons } from '@expo/vector-icons';
+
+const { width } = Dimensions.get('window');
 
 export default function SettingsScreen() {
   const user = auth.currentUser;
@@ -15,7 +18,6 @@ export default function SettingsScreen() {
   const [newPassword, setNewPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // 1. UPDATE BASIC INFO (Name/Age)
   const handleUpdateBasicInfo = async () => {
     if (!name) return Alert.alert("Error", "Name is required");
     setLoading(true);
@@ -30,103 +32,143 @@ export default function SettingsScreen() {
     setLoading(false);
   };
 
-  // 2. SECURITY UPDATE (Email/Password with Re-authentication)
   const handleSecurityUpdate = async () => {
     if (!currentPassword) {
-      Alert.alert("Security Required", "Please enter your current password to make changes.");
+      Alert.alert("Security Required", "Enter current password to authorize changes.");
       return;
     }
-
     setLoading(true);
     try {
-      // Step A: Re-authenticate the user
       const credential = EmailAuthProvider.credential(user.email, currentPassword);
       await reauthenticateWithCredential(user, credential);
 
-      // Step B: Update Email if changed
       if (email.toLowerCase().trim() !== user.email) {
         await updateEmail(user, email.toLowerCase().trim());
         await updateDoc(doc(db, "users", user.uid), { email: email.toLowerCase().trim() });
       }
 
-      // Step C: Update Password if entered
       if (newPassword) {
-        if (newPassword.length < 6) {
-            throw new Error("New password must be at least 6 characters.");
-        }
+        if (newPassword.length < 6) throw new Error("Password too short.");
         await updatePassword(user, newPassword);
       }
 
-      Alert.alert("Success", "Security settings updated successfully!");
+      Alert.alert("Success", "Security settings updated!");
       setCurrentPassword('');
       setNewPassword('');
     } catch (e) {
-      console.error(e);
-      Alert.alert("Update Failed", e.message.includes("auth/wrong-password") 
-        ? "Current password is incorrect." 
-        : e.message);
+      Alert.alert("Update Failed", e.message.includes("wrong-password") ? "Incorrect current password." : e.message);
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <ScrollView style={styles.container} keyboardShouldPersistTaps="handled">
-      <View style={styles.section}>
-        <Text style={styles.secTitle}>PERSONAL INFORMATION</Text>
-        <Text style={styles.lab}>DISPLAY NAME</Text>
-        <TextInput style={styles.input} value={name} onChangeText={setName} />
-        
-        <Text style={styles.lab}>AGE</Text>
-        <TextInput style={styles.input} value={age} onChangeText={setAge} keyboardType="numeric" />
-        
-        <TouchableOpacity style={styles.btn} onPress={handleUpdateBasicInfo}>
-          <Text style={styles.btnTxt}>SAVE PERSONAL INFO</Text>
-        </TouchableOpacity>
+    <View style={styles.container}>
+      <StatusBar barStyle="light-content" />
+
+      {/* BACKGROUND WATERMARK */}
+      <View style={styles.watermarkContainer} pointerEvents="none">
+        <Image 
+          source={require('../assets/images/logo.png')} 
+          style={styles.watermarkLogo} 
+          resizeMode="contain"
+        />
       </View>
 
-      <View style={styles.section}>
-        <Text style={styles.secTitle}>SECURITY & LOGINS</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
         
-        <Text style={styles.lab}>CURRENT PASSWORD (REQUIRED)</Text>
-        <TextInput 
-            style={[styles.input, { borderColor: '#ff4444', borderBottomWidth: 1 }]} 
+        {/* PERSONAL INFO SECTION */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="person-outline" size={18} color="#007AFF" />
+            <Text style={styles.secTitle}>PERSONAL INFORMATION</Text>
+          </View>
+          
+          <Text style={styles.lab}>FULL NAME</Text>
+          <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="Your Name" placeholderTextColor="#333" />
+          
+          <Text style={styles.lab}>AGE</Text>
+          <TextInput style={styles.input} value={age} onChangeText={setAge} keyboardType="numeric" placeholder="Age" placeholderTextColor="#333" />
+          
+          <TouchableOpacity style={styles.primaryBtn} onPress={handleUpdateBasicInfo} disabled={loading}>
+            <Text style={styles.btnTxt}>SAVE PROFILE</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* SECURITY SECTION */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Ionicons name="shield-lock-outline" size={18} color="#ff4444" />
+            <Text style={[styles.secTitle, {color: '#ff4444'}]}>SECURITY ENCRYPTION</Text>
+          </View>
+          
+          <Text style={styles.lab}>CURRENT PASSWORD (REQUIRED)</Text>
+          <TextInput 
+            style={[styles.input, styles.secureInput]} 
             value={currentPassword} 
             onChangeText={setCurrentPassword} 
             secureTextEntry 
-            placeholder="Confirm current password to save"
-        />
+            placeholder="Required to authorize changes"
+            placeholderTextColor="#444"
+          />
 
-        <Text style={[styles.lab, {marginTop: 15}]}>NEW EMAIL</Text>
-        <TextInput style={styles.input} value={email} onChangeText={setEmail} autoCapitalize="none" />
-        
-        <Text style={styles.lab}>NEW PASSWORD</Text>
-        <TextInput 
+          <Text style={styles.lab}>CHANGE EMAIL</Text>
+          <TextInput style={styles.input} value={email} onChangeText={setEmail} autoCapitalize="none" placeholderTextColor="#333" />
+          
+          <Text style={styles.lab}>NEW PASSWORD</Text>
+          <TextInput 
             style={styles.input} 
             value={newPassword} 
             onChangeText={setNewPassword} 
             secureTextEntry 
-            placeholder="Min 6 characters" 
-        />
+            placeholder="Minimum 6 characters" 
+            placeholderTextColor="#333"
+          />
 
-        <TouchableOpacity 
-          style={[styles.btn, {backgroundColor: '#1a1a1a'}]} 
-          onPress={handleSecurityUpdate}
-          disabled={loading}
-        >
-          {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnTxt}>UPDATE SECURITY</Text>}
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+          <TouchableOpacity 
+            style={styles.securityBtn} 
+            onPress={handleSecurityUpdate}
+            disabled={loading}
+          >
+            {loading ? <ActivityIndicator color="#000" /> : <Text style={styles.securityBtnTxt}>UPDATE SECURITY KEY</Text>}
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>ETERNAL CHAPTER SECURED NODE</Text>
+        </View>
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f4f4f4' },
-  section: { padding: 25, backgroundColor: '#fff', marginTop: 10 },
-  secTitle: { fontSize: 11, fontWeight: 'bold', color: '#666', marginBottom: 20, letterSpacing: 1 },
-  lab: { fontSize: 10, color: '#aaa', fontWeight: 'bold', marginBottom: 5 },
-  input: { borderBottomWidth: 1, borderColor: '#eee', paddingVertical: 10, marginBottom: 20, fontSize: 15, color: '#000' },
-  btn: { backgroundColor: '#007AFF', padding: 15, borderRadius: 10, alignItems: 'center' },
-  btnTxt: { color: '#fff', fontWeight: 'bold', fontSize: 13 }
+  container: { flex: 1, backgroundColor: '#000' },
+  watermarkContainer: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, justifyContent: 'center', alignItems: 'center', zIndex: 0 },
+  watermarkLogo: { width: width * 0.9, height: width * 0.9, opacity: 0.05, tintColor: '#fff' },
+  scrollContent: { padding: 25, paddingTop: 40, zIndex: 1 },
+
+  section: { 
+    backgroundColor: 'rgba(18, 18, 18, 0.85)', 
+    padding: 25, 
+    borderRadius: 25, 
+    marginBottom: 25, 
+    borderWidth: 1, 
+    borderColor: '#1a1a1a' 
+  },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 25 },
+  secTitle: { fontSize: 11, fontWeight: '900', color: '#007AFF', letterSpacing: 2 },
+  
+  lab: { fontSize: 8, color: '#444', fontWeight: '900', marginBottom: 5, letterSpacing: 1 },
+  input: { borderBottomWidth: 1, borderColor: '#222', paddingVertical: 12, marginBottom: 20, fontSize: 14, color: '#fff', fontWeight: '600' },
+  secureInput: { borderColor: 'rgba(255, 68, 68, 0.3)' },
+  
+  primaryBtn: { backgroundColor: '#007AFF', padding: 18, borderRadius: 14, alignItems: 'center', marginTop: 10 },
+  securityBtn: { backgroundColor: '#fff', padding: 18, borderRadius: 14, alignItems: 'center', marginTop: 10 },
+  
+  btnTxt: { color: '#fff', fontWeight: '900', fontSize: 11, letterSpacing: 1 },
+  securityBtnTxt: { color: '#000', fontWeight: '900', fontSize: 11, letterSpacing: 1 },
+  
+  footer: { alignItems: 'center', marginTop: 20, marginBottom: 40 },
+  footerText: { color: '#222', fontSize: 9, fontWeight: 'bold', letterSpacing: 3 }
 });

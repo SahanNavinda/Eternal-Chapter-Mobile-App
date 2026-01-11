@@ -1,8 +1,24 @@
 import React, { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, Alert, TextInput, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { 
+  StyleSheet, 
+  Text, 
+  View, 
+  TouchableOpacity, 
+  Alert, 
+  TextInput, 
+  ActivityIndicator, 
+  KeyboardAvoidingView, 
+  Platform, 
+  Image, 
+  StatusBar,
+  Dimensions
+} from 'react-native';
 import { auth, db } from '../firebaseConfig'; 
 import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore"; // Import Firestore functions
+import { doc, setDoc } from "firebase/firestore";
+import { Ionicons } from '@expo/vector-icons';
+
+const { width } = Dimensions.get('window');
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -12,23 +28,17 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleAuthentication = async () => {
-    // Validation: Name is required only for registration
     if (!email || !password || (isRegistering && !name)) {
-      Alert.alert("Error", "Please fill in all fields.");
+      Alert.alert("Required Fields", "Please provide all necessary credentials.");
       return;
     }
 
     setLoading(true);
     try {
       if (isRegistering) {
-        // 1. Create the Auth Account
         const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-        
-        // 2. Update the Auth Profile with the Name
         await updateProfile(userCredential.user, { displayName: name });
 
-        // 3. CRITICAL: Save User to Firestore 'users' collection 
-        // This makes the name searchable for the Leader
         await setDoc(doc(db, "users", userCredential.user.uid), {
           displayName: name,
           email: email.toLowerCase().trim(),
@@ -36,14 +46,12 @@ export default function LoginScreen() {
           createdAt: new Date().toISOString()
         });
 
-        Alert.alert("Success", `Account created for ${name}`);
+        Alert.alert("Welcome", `Creative profile created for ${name}`);
       } else {
-        // Simple Login
         await signInWithEmailAndPassword(auth, email, password);
       }
     } catch (error) {
-      console.error(error);
-      Alert.alert("Authentication Error", error.message);
+      Alert.alert("Authentication Failed", error.message);
     } finally {
       setLoading(false);
     }
@@ -54,38 +62,58 @@ export default function LoginScreen() {
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       style={styles.container}
     >
-      <Text style={styles.title}>ETERNAL CHAPTER</Text>
-      <Text style={styles.subtitle}>PRODUCTION PORTAL</Text>
+      <StatusBar barStyle="light-content" />
+      
+      {/* BRANDING SECTION */}
+      <View style={styles.logoContainer}>
+        <Image 
+          source={require('../assets/images/logo.png')} 
+          style={styles.mainLogo} 
+          resizeMode="contain" 
+        />
+        <Text style={styles.title}>ETERNAL CHAPTER</Text>
+        <Text style={styles.subtitle}>PRODUCTION PORTAL</Text>
+      </View>
 
+      {/* AUTH CARD */}
       <View style={styles.card}>
         {isRegistering && (
-          <TextInput 
-            style={styles.input} 
-            placeholder="Full Name (e.g. Nimal Perera)" 
-            value={name} 
-            onChangeText={setName} 
-            placeholderTextColor="#999"
-          />
+          <View style={styles.inputContainer}>
+            <Ionicons name="person-outline" size={18} color="#007AFF" style={styles.inputIcon} />
+            <TextInput 
+              style={styles.input} 
+              placeholder="Full Name" 
+              value={name} 
+              onChangeText={setName} 
+              placeholderTextColor="#444"
+            />
+          </View>
         )}
         
-        <TextInput 
-          style={styles.input} 
-          placeholder="Email Address" 
-          value={email} 
-          onChangeText={setEmail} 
-          autoCapitalize="none"
-          keyboardType="email-address"
-          placeholderTextColor="#999"
-        />
+        <View style={styles.inputContainer}>
+          <Ionicons name="mail-outline" size={18} color="#007AFF" style={styles.inputIcon} />
+          <TextInput 
+            style={styles.input} 
+            placeholder="Email Address" 
+            value={email} 
+            onChangeText={setEmail} 
+            autoCapitalize="none"
+            keyboardType="email-address"
+            placeholderTextColor="#444"
+          />
+        </View>
         
-        <TextInput 
-          style={styles.input} 
-          placeholder="Password" 
-          value={password} 
-          onChangeText={setPassword} 
-          secureTextEntry 
-          placeholderTextColor="#999"
-        />
+        <View style={styles.inputContainer}>
+          <Ionicons name="lock-closed-outline" size={18} color="#007AFF" style={styles.inputIcon} />
+          <TextInput 
+            style={styles.input} 
+            placeholder="Password" 
+            value={password} 
+            onChangeText={setPassword} 
+            secureTextEntry 
+            placeholderTextColor="#444"
+          />
+        </View>
         
         <TouchableOpacity 
           style={[styles.button, loading && { opacity: 0.7 }]} 
@@ -93,17 +121,21 @@ export default function LoginScreen() {
           disabled={loading}
         >
           {loading ? (
-            <ActivityIndicator color="#fff" />
+            <ActivityIndicator color="#000" />
           ) : (
-            <Text style={styles.buttonText}>{isRegistering ? "CREATE ACCOUNT" : "LOGIN"}</Text>
+            <Text style={styles.buttonText}>{isRegistering ? "CREATE ACCOUNT" : "SIGN IN"}</Text>
           )}
         </TouchableOpacity>
 
         <TouchableOpacity onPress={() => setIsRegistering(!isRegistering)} style={styles.toggleBtn}>
           <Text style={styles.toggleText}>
-            {isRegistering ? "Already have an account? Login" : "New Team Member? Sign Up Here"}
+            {isRegistering ? "ALREADY A MEMBER? LOGIN" : "NEW CREATIVE? SIGN UP HERE"}
           </Text>
         </TouchableOpacity>
+      </View>
+
+      <View style={styles.footer}>
+        <Text style={styles.footerText}>SECURE PRODUCTION NODE v2.0</Text>
       </View>
     </KeyboardAvoidingView>
   );
@@ -112,63 +144,93 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: '#1a1a1a', 
+    backgroundColor: '#000', 
     justifyContent: 'center', 
-    padding: 25 
+    padding: 30 
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 40
+  },
+  mainLogo: {
+    width: 100,
+    height: 100,
+    tintColor: '#fff', // Forces black logo to white
+    marginBottom: 20
   },
   title: { 
     color: '#fff', 
-    fontSize: 32, 
-    fontWeight: 'bold', 
+    fontSize: 22, 
+    fontWeight: '900', 
     textAlign: 'center', 
-    letterSpacing: 2 
+    letterSpacing: 4 
   },
   subtitle: { 
     color: '#007AFF', 
     textAlign: 'center', 
-    fontSize: 12, 
+    fontSize: 10, 
     fontWeight: 'bold', 
-    marginBottom: 40,
-    letterSpacing: 1
+    letterSpacing: 2,
+    marginTop: 5
   },
   card: { 
-    backgroundColor: '#fff', 
-    padding: 25, 
-    borderRadius: 20,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.3,
-    shadowRadius: 20,
-    elevation: 10
+    backgroundColor: 'rgba(18, 18, 18, 0.8)', 
+    padding: 30, 
+    borderRadius: 30,
+    borderWidth: 1,
+    borderColor: '#1a1a1a'
+  },
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#1a1a1a',
+    marginBottom: 20
+  },
+  inputIcon: {
+    marginRight: 10
   },
   input: { 
-    borderBottomWidth: 1, 
-    borderBottomColor: '#eee', 
-    padding: 15, 
-    marginBottom: 15, 
-    fontSize: 16,
-    color: '#000'
+    flex: 1,
+    paddingVertical: 12, 
+    fontSize: 14,
+    color: '#fff',
+    fontWeight: '600'
   },
   button: { 
-    backgroundColor: '#000', 
+    backgroundColor: '#fff', 
     padding: 18, 
-    borderRadius: 12, 
+    borderRadius: 15, 
     alignItems: 'center',
-    marginTop: 10
+    marginTop: 15
   },
   buttonText: { 
-    color: '#fff', 
-    fontWeight: 'bold', 
-    fontSize: 16,
+    color: '#000', 
+    fontWeight: '900', 
+    fontSize: 14,
     letterSpacing: 1
   },
   toggleBtn: { 
-    marginTop: 20 
+    marginTop: 25 
   },
   toggleText: { 
     textAlign: 'center', 
-    color: '#007AFF', 
-    fontWeight: '600',
-    fontSize: 14 
+    color: '#444', 
+    fontWeight: '900',
+    fontSize: 10,
+    letterSpacing: 1
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 40,
+    left: 0,
+    right: 0,
+    alignItems: 'center'
+  },
+  footerText: {
+    color: '#1a1a1a',
+    fontSize: 8,
+    fontWeight: 'bold',
+    letterSpacing: 2
   }
 });
